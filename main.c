@@ -3,8 +3,21 @@
 #include <string.h>
 #include "at.h"
 
-#define MAX_RESPONSE_LINES 100
+
 #define MAX_LINE_LENGTH 4096
+#define MAX_COMMANDS 2000
+#define MAX_COMMAND_LENGTH 256
+
+
+int isSpecialChar(char ch) {
+    return ch == 13 || ch == 10;
+}
+
+typedef struct {
+    char command[MAX_COMMAND_LENGTH];
+    int row;
+} ExtractedCommand;
+
 
 int main(int argc, char *argv[])
 {
@@ -20,62 +33,72 @@ int main(int argc, char *argv[])
     }
 
     char line[MAX_LINE_LENGTH];
-    char command[MAX_LINE_LENGTH];
-    int command_length = 0;
     int row = 1;
+    ExtractedCommand extractedCommands[MAX_COMMANDS];
+    int extractedCount = 0;
 
-    char response_lines[MAX_RESPONSE_LINES][MAX_LINE_LENGTH];
-    int response_rows[MAX_RESPONSE_LINES];
-    int response_count = 0;
-
-    int result;
+    char commandBuffer[MAX_COMMAND_LENGTH] = "";
+    int commandBufferIndex = 0;
 
     while (fgets(line, sizeof(line), file)) {
         int i = 0;
         while (line[i] != '\0') {
+
             int ch = line[i];
-            result = at_parse(ch);
+            int result = at_parse(ch);
 
-            printf("Command %d     ", row);
-            if (ch != 13 && ch != 10)
-                printf("%c ", ch);
-            if (ch == 13 || ch == 10)
-                printf("  ");
-            if (result == 1) {
-               printf("Ready OK.\n");
+            if (!isSpecialChar(ch)) {
+                printf("Command %d     %c ", row, ch);
+
+                if (result == 1) {
+                    printf("Ready OK.\n");
                 } else if (result == 3) {
-                   printf("Ready ERROR.\n");
+                    printf("Ready ERROR.\n");
                 } else if (result == 2) {
-                   printf("Syntax ERROR.\n");
+                    printf("Syntax ERROR.\n");
                 } else if (result == 0) {
-                   printf("Not ready yet.\n");
+                    printf("Not ready yet.\n");
+                }
+                commandBuffer[commandBufferIndex++] = ch;
+            }
+            else
+            {
+
+                printf("Command %d        ", row);
+                if (result == 1) {
+                    printf("Ready OK.\n");
+                } else if (result == 3) {
+                    printf("Ready ERROR.\n");
+                } else if (result == 2) {
+                    printf("Syntax ERROR.\n");
+                } else if (result == 0) {
+                    printf("Not ready yet.\n");
                 }
 
-            if (ch == '\n') {
-                row++;
-                if (command_length > 0) {
-                    if (result == 1 || result == 3) {
-                        strcpy(response_lines[response_count], command);
-                        response_rows[response_count] = row;
-                        response_count++;
-                    }
-                    memset(command, 0, sizeof(command));
-                    command_length = 0;
-                }
-            } else {
-                command[command_length++] = ch;
             }
 
-            i++;
+
+            if (ch == '\n') {
+                    commandBuffer[commandBufferIndex] = '\0';
+                    if (commandBufferIndex > 0) {
+                        if(strcmp(commandBuffer, "OK") != 0 && strcmp(commandBuffer, "ERROR") != 0)
+                        {strcpy(extractedCommands[extractedCount].command, commandBuffer);
+                        extractedCommands[extractedCount].row = row;
+                        extractedCount++;
+                        }
+                    }
+                    commandBufferIndex = 0;
+                row++;
+            }
+        i++;
         }
     }
 
     fclose(file);
 
-    printf("\n");
-    for (int i = 0; i < response_count; i++) {
-        printf("Command %d: %s\n", response_rows[i], response_lines[i]);
-    }
+    printf("Extracted Commands:\n");
+    for (int i = 0; i < extractedCount; i++)
+        printf("Command %d (Row %d): %s\n", i + 1, extractedCommands[i].row, extractedCommands[i].command);
 
     return 0;
 }
